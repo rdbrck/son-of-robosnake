@@ -1,16 +1,13 @@
 local util = {}
 
-
 -- Lua optimization: any functions from another module called more than once
 -- are faster if you create a local reference to that function.
-local DEBUG = ngx.DEBUG
-local log = ngx.log
+local log = logger.log
 local random = math.random
-
 
 --[[
     PRIVATE METHODS
-]]
+--]]
 
 
 -- @see https://github.com/vadi2/mudlet-lua/blob/2630cbeefc3faef3079556cb06459d1f53b8f842/lua/Other.lua#L467
@@ -31,8 +28,7 @@ end
 
 --[[
     PUBLIC METHODS
-]]
-
+--]]
 
 --- I'M A BELIEBER
 -- @return a random quote from Justin Bieber
@@ -52,10 +48,12 @@ end
 --- Take the BattleSnake arena's state JSON and use it to create our own grid
 -- @param gameState The arena's game state JSON
 -- @return A 2D table with each cell mapped to food, snakes, etc.
-function util.buildWorldMap( gameState )
-    
+function util.buildWorldMap( gameState, log_id )
+
+    local INFO = "info." .. log_id
+    local DEBUG = "debug." .. log_id
+
     -- Generate the tile grid
-    log( DEBUG, 'Generating tile grid' )
     local grid = {}
     for y = 1, gameState[ 'height' ] do
         grid[y] = {}
@@ -68,26 +66,42 @@ function util.buildWorldMap( gameState )
     for i = 1, #gameState[ 'food' ][ 'data' ] do
         local food = gameState[ 'food' ][ 'data' ][i]
         grid[ food[ 'y' ] ][ food[ 'x' ] ] = 'O'
-        log( DEBUG, string.format( 'Placed food at [%s, %s]', food[ 'x' ], food[ 'y' ] ) )
+
+        food_log = { game_id = log_id, turn = gameState[ 'turn' ], who = "game", item = "food", coordinates = { x = food[ 'x' ], y = food[ 'y' ] } }
+        log(INFO , food_log )
     end
     
     -- Place living snakes
     for i = 1, #gameState[ 'snakes' ][ 'data' ] do
         local length = #gameState[ 'snakes' ][ 'data' ][i][ 'body' ][ 'data' ]
+        local whoami = gameState[ 'snakes' ][ 'data' ][i][ 'id' ]
+
         for j = 1, length do
             local snake = gameState[ 'snakes' ][ 'data' ][i][ 'body' ][ 'data' ][j]
+            local health = gameState[ 'snakes' ][ 'data' ][i][ 'health' ]
+            local snake_log = { health = health, game_id = log_id, who = whoami, turn = gameState[ 'turn' ], length = length, coordinates = { x = snake[ 'x' ], y = snake[ 'y' ] } }
+
             if j == 1 then
                 grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '@'
-                log( DEBUG, string.format( 'Placed snake head at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
+
+                snake_log.item = "head"
+                log(INFO, snake_log)
+                log(DEBUG, string.format( 'Placed snake head at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
             elseif j == length then
                 if grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '@' and grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '#' then
                     grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '*'
                 end
+
+                snake_log.item = "tail"
+                log(INFO, snake_log)
             else
                 if grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '@' then
                     grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '#'
                 end
-                log( DEBUG, string.format( 'Placed snake tail at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
+
+                snake_log.item = "body"
+                log(INFO, snake_log)
+                log(DEBUG, string.format( 'Placed snake tail at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
             end
         end
     end
@@ -147,6 +161,10 @@ end
 --- Prints the grid as an ASCII representation of the world map
 -- @param grid The game grid
 function util.printWorldMap( grid )
+   -- [deprecated] See new logging / replay module    
+    return
+
+    --[[
     local str = "\n"
     for y = 1, #grid do
         for x = 1, #grid[y] do
@@ -156,7 +174,9 @@ function util.printWorldMap( grid )
             str = str .. "\n"
         end
     end
-    log( DEBUG, str )
+
+    ngx.log( ngx.DEBUG, str )
+    --]]
 end
 
 
