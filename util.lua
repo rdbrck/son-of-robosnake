@@ -1,16 +1,14 @@
 local util = {}
 
-
 -- Lua optimization: any functions from another module called more than once
 -- are faster if you create a local reference to that function.
-local DEBUG = ngx.DEBUG
-local log = ngx.log
+local log = logger.log
 local random = math.random
-
+local LOG_ENABLED = LOGGER_ENABLED
 
 --[[
     PRIVATE METHODS
-]]
+--]]
 
 
 --- Recursively compares two variables for equality.
@@ -35,8 +33,7 @@ end
 
 --[[
     PUBLIC METHODS
-]]
-
+--]]
 
 --- I'M A BELIEBER
 -- @return a random quote from Justin Bieber
@@ -57,9 +54,12 @@ end
 -- @param gameState The arena's game state JSON
 -- @return A 2D table with each cell mapped to food, snakes, etc.
 function util.buildWorldMap( gameState )
-    
+    local log_id = ngx.ctx.log_id
+
+    local INFO = "info." .. log_id
+    local DEBUG = "debug." .. log_id
+
     -- Generate the tile grid
-    log( DEBUG, 'Generating tile grid' )
     local grid = {}
     for y = 1, gameState[ 'height' ] do
         grid[ y ] = {}
@@ -72,28 +72,73 @@ function util.buildWorldMap( gameState )
     for i = 1, #gameState[ 'food' ][ 'data' ] do
         local food = gameState[ 'food' ][ 'data' ][i]
         grid[ food[ 'y' ] ][ food[ 'x' ] ] = 'O'
-        log( DEBUG, string.format( 'Placed food at [%s, %s]', food[ 'x' ], food[ 'y' ] ) )
+
+        local food_log = {
+            game_id = log_id,
+            width = gameState['width'],
+            height = gameState[ 'height'],
+            turn = gameState[ 'turn' ],
+            who = "game",
+            item = "food",
+            coordinates = { x = food[ 'x' ], y = food[ 'y' ] }
+        }
+
+        if LOG_ENABLED then log( INFO , food_log ) end
     end
     
     -- Place living snakes
     for i = 1, #gameState[ 'snakes' ][ 'data' ] do
-        local length = #gameState[ 'snakes' ][ 'data' ][ i ][ 'body' ][ 'data' ]
+        local player = gameState[ 'snakes' ][ 'data' ][ i ]
+
+        local length = #player[ 'body' ][ 'data' ]
+        local whoami = player[ 'id' ]
+        local name = player[ 'name' ]
+        local health = player[ 'health' ]
+
         for j = 1, length do
             local snake = gameState[ 'snakes' ][ 'data' ][ i ][ 'body' ][ 'data' ][ j ]
-            if j == 1 then
-                grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '@'
-                log( DEBUG, string.format( 'Placed snake head at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
-            elseif j == length then
-                if grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '@' and grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '#' then
-                    grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '*'
-                end
-            else
-                if grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '@' then
-                    grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '#'
-                end
-                log( DEBUG, string.format( 'Placed snake tail at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
-            end
-        end
+
+            local snake_log = ({
+                health = health,
+                game_id = log_id,
+                who = whoami,
+                name = name,
+                width = gameState['width'],
+                height = gameState[ 'height'],
+                turn = gameState[ 'turn' ],
+                length = length,
+                coordinates = { x = snake[ 'x' ], y = snake[ 'y' ] }
+             })
+
+             if j == 1 then
+                 grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '@'
+
+                 snake_log.item = "head"
+                 if LOG_ENABLED then
+                     log( INFO, snake_log )
+                     log( DEBUG, string.format( 'Placed snake head at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
+                 end
+         
+             elseif j == length then
+                 if grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '@' and grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '#' then
+                     grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '*'
+                 end
+
+                 snake_log.item = "tail"
+                 if LOG_ENABLED then log(INFO, snake_log) end
+             else
+                 if grid[ snake[ 'y' ] ][ snake[ 'x' ] ] ~= '@' then
+                     grid[ snake[ 'y' ] ][ snake[ 'x' ] ] = '#'
+                 end
+
+                 snake_log.item = "body"
+
+                 if LOG_ENABLED then
+                     log(INFO, snake_log)
+                     log(DEBUG, string.format( 'Placed snake tail at [%s, %s]', snake[ 'x' ], snake[ 'y' ] ) )
+                 end
+             end
+         end
     end
     
     return grid
@@ -166,7 +211,12 @@ end
 
 --- Prints the grid as an ASCII representation of the world map
 -- @param grid The game grid
+-- @deprecated. Should be safe to remove, but let's keep incase
+-- everything goes horribly horribly wrong.
 function util.printWorldMap( grid )
+    return
+
+    --[[
     local str = "\n"
     for y = 1, #grid do
         for x = 1, #grid[ y ] do
@@ -176,7 +226,9 @@ function util.printWorldMap( grid )
             str = str .. "\n"
         end
     end
-    log( DEBUG, str )
+
+    ngx.log( ngx.DEBUG, str )
+    ]]--
 end
 
 
